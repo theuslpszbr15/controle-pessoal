@@ -20,6 +20,7 @@ export const temaAtual = () => TEMAS.find((t) => t.id === state.settings.tema) |
 export function applyTheme(id, animate = true) {
   const tema = TEMAS.find((t) => t.id === id) || TEMAS[0];
   document.body.dataset.theme = tema.id;
+  localStorage.setItem('cp:tema', tema.id);
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', cssVar('--bg'));
   shared.bg?.readTheme(animate);
   shared.router?.onTheme();

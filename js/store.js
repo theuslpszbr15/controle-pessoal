@@ -54,6 +54,8 @@ export const KEYS = Object.keys(defaults());
 export const state = defaults();
 
 let db = null;
+let dbReady = null;
+let userId = null;
 const listeners = new Set();
 
 function openDB() {
@@ -82,19 +84,39 @@ function idbPut(key, value) {
   });
 }
 
-export async function load() {
+export function initDB() {
+  dbReady ||= openDB()
+    .then((d) => (db = d))
+    .catch(() => (db = null));
+  return dbReady;
+}
+
+export async function rawGet(key) {
+  await initDB();
   try {
-    db = await openDB();
+    return db ? await idbGet(key) : JSON.parse(localStorage.getItem(LS_PREFIX + key) || 'null');
   } catch {
-    db = null;
+    return undefined;
   }
+}
+
+export async function rawPut(key, value) {
+  await initDB();
+  if (db) await idbPut(key, value);
+  else localStorage.setItem(LS_PREFIX + key, JSON.stringify(value));
+}
+
+// Cada usuário tem suas próprias chaves: "u:<id>:<chave>".
+const userKey = (key) => `u:${userId}:${key}`;
+
+export async function load(id, { migrarLegado = false } = {}) {
+  userId = id;
   const base = defaults();
   for (const key of KEYS) {
-    let value;
-    try {
-      value = db ? await idbGet(key) : JSON.parse(localStorage.getItem(LS_PREFIX + key) || 'null');
-    } catch {
-      value = undefined;
+    let value = await rawGet(userKey(key));
+    if ((value === undefined || value === null) && migrarLegado) {
+      value = await rawGet(key);
+      if (value !== undefined && value !== null) await rawPut(userKey(key), value);
     }
     if (value === undefined || value === null) state[key] = base[key];
     else if (key === 'settings') state[key] = { ...base.settings, ...value, foco: { ...base.settings.foco, ...value.foco } };
@@ -108,17 +130,21 @@ let flushTimer = null;
 
 async function flush() {
   flushTimer = null;
+  if (!userId) return;
   const keys = [...pending];
   pending.clear();
   for (const key of keys) {
-    const value = structuredClone(state[key]);
     try {
-      if (db) await idbPut(key, value);
-      else localStorage.setItem(LS_PREFIX + key, JSON.stringify(value));
+      await rawPut(userKey(key), structuredClone(state[key]));
     } catch (err) {
       console.error('Falha ao salvar', key, err);
     }
   }
+}
+
+export async function flushNow() {
+  clearTimeout(flushTimer);
+  await flush();
 }
 
 // Marca chaves alteradas, grava em lote e avisa a interface.

@@ -85,8 +85,9 @@ export default {
     requestAnimationFrame(() => view.querySelectorAll('[data-w]').forEach((b) => (b.style.width = `${Math.min(100, b.dataset.w)}%`)));
 
     const frases = [
-      nome ? `${greeting()}, ${nome}` : `${greeting()}!`,
-      `${tema.emoji} ${tema.frase}`,
+      nome ? `Olá, ${nome}!` : 'Olá!',
+      `${greeting()}! ${tema.emoji}`,
+      tema.frase,
       tarefas.length ? `${tarefas.length} ${tarefas.length === 1 ? 'tarefa' : 'tarefas'} para hoje` : 'Nenhuma tarefa para hoje',
     ];
     if (state.habitos.length) frases.push(habitosFeitos === state.habitos.length ? 'Hábitos do dia completos 🔥' : `${state.habitos.length - habitosFeitos} hábitos esperando você`);

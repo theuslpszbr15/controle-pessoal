@@ -1,24 +1,16 @@
-import { state, commit, exportData, importData, resetAll, categoria } from '../store.js';
+import { state, commit, exportData, flushNow, importData, resetAll, categoria } from '../store.js';
 import { download, esc, todayISO } from '../utils.js';
 import { icon } from '../icons.js';
 import { confirmSheet, fields, invalid, openSheet, toast } from '../ui.js';
 import { TEMAS, applyTheme } from '../themes.js';
 import { shared } from '../shared.js';
+import { atualizarNome, hashSegredo, novoSalt, sair, trocarSenha, usuarioAtual } from '../auth.js';
 
 // ---------- PIN ----------
-const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-async function hashPin(pin, saltHex) {
-  const salt = Uint8Array.from(saltHex.match(/../g).map((h) => Number.parseInt(h, 16)));
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' }, key, 256);
-  return hex(bits);
-}
-
 export async function verifyPin(pin) {
   const { pinHash, pinSalt } = state.settings;
   if (!pinHash) return true;
-  return (await hashPin(pin, pinSalt)) === pinHash;
+  return (await hashSegredo(pin, pinSalt)) === pinHash;
 }
 
 function openPin() {
@@ -34,9 +26,9 @@ function openPin() {
     onSubmit: async (v, form) => {
       if (!/^\d{4,8}$/.test(v.pin)) return invalid(form, 'pin', 'Use de 4 a 8 números.');
       if (v.pin !== v.pin2) return invalid(form, 'pin2', 'Os PINs não conferem.');
-      const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
+      const salt = novoSalt();
       state.settings.pinSalt = salt;
-      state.settings.pinHash = await hashPin(v.pin, salt);
+      state.settings.pinHash = await hashSegredo(v.pin, salt);
       commit('settings');
       toast('PIN ativado', { icon: '🔒' });
     },
@@ -76,11 +68,20 @@ export default {
     const s = state.settings;
     const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     const renderer = document.documentElement.dataset.renderer || 'css';
+    const user = usuarioAtual();
 
     view.innerHTML = `
-      <section class="card">
-        <div class="card__title">Perfil</div>
+      <section class="card card--accent">
+        <div class="card__title">Sua conta</div>
+        <div class="row" style="margin-bottom:12px">
+          <span class="avatar">${esc((s.nome || user?.usuario || '?').charAt(0).toUpperCase())}</span>
+          <div class="grow"><strong class="display" style="font-size:1.2rem">${esc(s.nome || 'Sem nome')}</strong><div class="small muted">@${esc(user?.usuario || '')}</div></div>
+        </div>
         <label class="field"><span>Como quer ser chamado?</span><input class="input" data-nome value="${esc(s.nome)}" placeholder="Seu nome" maxlength="40" autocomplete="given-name"></label>
+        <div class="grid grid--2" style="margin-top:12px">
+          <button class="btn" data-senha>${icon('lock')} Trocar senha</button>
+          <button class="btn btn--soft" data-sair>Sair da conta</button>
+        </div>
       </section>
 
       <section class="section">
@@ -125,10 +126,37 @@ export default {
       <p class="small muted" style="text-align:center;margin:22px 0 6px">Controle Pessoal · HTML, SCSS, GSAP, Three.js, Matter.js, WebGPU/WebGL2</p>`;
 
     const nome = view.querySelector('[data-nome]');
-    nome.addEventListener('change', () => {
-      state.settings.nome = nome.value.trim();
+    nome.addEventListener('change', async () => {
+      const novo = nome.value.trim();
+      if (novo.length < 2) return toast('Use pelo menos 2 letras', { icon: '⚠️' });
+      state.settings.nome = novo;
       commit('settings');
-      toast('Nome salvo', { icon: '👋' });
+      await atualizarNome(novo);
+      toast(`Prazer, ${novo}!`, { icon: '👋' });
+    });
+
+    view.querySelector('[data-senha]').addEventListener('click', () =>
+      openSheet({
+        title: 'Trocar senha',
+        body: fields([
+          { name: 'atual', label: 'Senha atual', type: 'password', attrs: 'autocomplete="current-password"' },
+          { name: 'nova', label: 'Nova senha (mín. 6)', type: 'password', attrs: 'autocomplete="new-password"' },
+          { name: 'nova2', label: 'Repita a nova senha', type: 'password', attrs: 'autocomplete="new-password"' },
+        ]),
+        onSubmit: async (v, form) => {
+          if (v.nova.length < 6) return invalid(form, 'nova', 'A nova senha precisa ter pelo menos 6 caracteres.');
+          if (v.nova !== v.nova2) return invalid(form, 'nova2', 'As senhas não conferem.');
+          if (!(await trocarSenha(v.atual, v.nova))) return invalid(form, 'atual', 'Senha atual incorreta.');
+          toast('Senha alterada', { icon: '🔑' });
+        },
+      }),
+    );
+    view.querySelector('[data-sair]').addEventListener('click', async () => {
+      if (!(await confirmSheet('Sair da conta neste aparelho? Seus dados continuam salvos.', { okLabel: 'Sair', danger: false, title: 'Sair' }))) return;
+      await flushNow();
+      sair();
+      location.hash = '';
+      location.reload();
     });
 
     view.querySelectorAll('[data-tema]').forEach((b) =>
@@ -181,6 +209,8 @@ export default {
     view.querySelector('[data-reset]').addEventListener('click', async () => {
       if (!(await confirmSheet('Isso apaga TODOS os dados do app neste aparelho. Faça um backup antes. Continuar?', { okLabel: 'Apagar tudo' }))) return;
       resetAll();
+      state.settings.nome = user?.nome || '';
+      commit('settings');
       applyTheme(state.settings.tema);
       toast('Dados apagados', { icon: '🧹' });
       ctx.go('inicio');

@@ -2,7 +2,16 @@
 
 App pessoal para o dia a dia, que funciona offline e pode ser instalado no celular (PWA): **finanças, metas, contas, tarefas, hábitos, agenda, compras, notas/diário e foco**. Tem 10 temas e animações com WebGPU/WebGL2, Three.js, Matter.js e GSAP.
 
-Os dados ficam **só no seu aparelho** (IndexedDB). Não existe servidor nem login, e o backup é feito em JSON.
+Os dados ficam **só no seu aparelho** (IndexedDB). Não existe servidor e o backup é feito em JSON.
+
+## Contas e login
+
+No primeiro acesso, você cria uma conta com nome, usuário e senha. Depois disso, entra com usuário e senha e o app recebe você com **“Olá, Nome!”**.
+
+- Cada usuário tem os próprios dados, então dá para ter mais de uma conta no mesmo aparelho.
+- A senha é guardada como hash PBKDF2 (nunca em texto puro).
+- Marcando **Manter conectado**, o app abre direto. Para sair, use **Ajustes → Sair da conta**.
+- A senha não pode ser recuperada, então faça backups.
 
 ## Módulos
 
@@ -61,6 +70,7 @@ sw.js                 service worker (offline e atualização)
 scss/                 estilos (temas em _themes.scss)
 css/app.css           CSS compilado
 js/app.js             roteador, navegação, PIN, inicialização
+js/auth.js            contas locais, login e boas-vindas
 js/store.js           dados (IndexedDB), backup
 js/ui.js              sheets, formulários, toasts, abas animadas
 js/textmorph.js       text morph e contadores animados

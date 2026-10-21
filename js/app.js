@@ -1,4 +1,5 @@
-import { commit, load, state, subscribe } from './store.js';
+import { commit, initDB, load, state, subscribe } from './store.js';
+import { boasVindas, carregarUsuarios, sessaoSalva, telaLogin } from './auth.js';
 import { icon } from './icons.js';
 import { textMorph } from './textmorph.js';
 import { animateIn, closeSheet, initSheet, initSpotlight, openSheet, toast } from './ui.js';
@@ -287,15 +288,31 @@ function registerSW() {
 
 // ---------- Inicialização ----------
 async function boot() {
-  await load();
-  applyTheme(state.settings.tema, false);
-  const unlocked = lock();
-
+  await initDB();
+  applyTheme(localStorage.getItem('cp:tema') || 'ametista', false);
   shared.router = { onTheme: () => MODULES.forEach((m) => m.onTheme?.()) };
   const bg = new Background(document.getElementById('bg-canvas'));
-  bg.animate = state.settings.fundoAnimado;
   shared.bg = bg;
   bg.init();
+  registerSW();
+
+  await carregarUsuarios();
+  let user = sessaoSalva();
+  const viaSessao = !!user;
+  let primeiro = false;
+  if (!user) ({ user, primeiro } = await telaLogin());
+
+  await load(user.id, { migrarLegado: primeiro });
+  if (!state.settings.nome) {
+    state.settings.nome = user.nome;
+    commit('settings');
+  }
+  applyTheme(state.settings.tema, !viaSessao);
+  bg.setAnimate(state.settings.fundoAnimado);
+  const unlocked = viaSessao ? lock() : Promise.resolve();
+
+  if (!viaSessao) await boasVindas(state.settings.nome || user.nome);
+  document.body.classList.remove('is-auth');
 
   initSheet();
   initSpotlight();
@@ -304,7 +321,6 @@ async function boot() {
   window.addEventListener('hashchange', route);
   route();
   document.getElementById('today').textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date());
-  registerSW();
 
   await unlocked;
   const acao = new URLSearchParams(location.search).get('acao');

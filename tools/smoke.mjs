@@ -34,7 +34,18 @@ page.on('requestfailed', (r) => {
 const desktop = process.argv.includes('--desktop');
 await page.setViewport(desktop ? { width: 1366, height: 860, deviceScaleFactor: 1 } : { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 await page.goto(BASE, { waitUntil: 'networkidle0' });
-await page.waitForSelector('.page');
+const suffixAuth = process.argv.includes('--desktop') ? '-desktop' : '';
+await page.waitForSelector('#auth form');
+await new Promise((r) => setTimeout(r, 900));
+await page.screenshot({ path: `screens/auth-cadastro${suffixAuth}.png` });
+await page.type('#auth [name=nome]', 'Matheus');
+await page.type('#auth [name=usuario]', 'matheus');
+await page.type('#auth [name=senha]', 'segredo123');
+await page.type('#auth [name=senha2]', 'segredo123');
+await page.click('#auth [data-submit]');
+await new Promise((r) => setTimeout(r, 1900));
+await page.screenshot({ path: `screens/boas-vindas${suffixAuth}.png` });
+await page.waitForSelector('.page', { timeout: 15000 });
 
 // Dados de exemplo usando os próprios módulos do app
 await page.evaluate(async () => {
@@ -150,6 +161,30 @@ for (const tema of ['lavanda', 'oceano', 'floresta', 'terracota', 'papel', 'graf
 
 const renderer = await page.evaluate(() => document.documentElement.dataset.renderer);
 console.log('renderer:', renderer);
+
+// Sair e entrar de novo: senha errada deve falhar, a certa deve abrir o app com os mesmos dados
+await page.evaluate(() => {
+  localStorage.removeItem('cp:sessao');
+  sessionStorage.removeItem('cp:sessao');
+});
+await page.goto(BASE, { waitUntil: 'networkidle0' });
+await page.waitForSelector('#auth form');
+await page.type('#auth [name=usuario]', 'matheus');
+await page.type('#auth [name=senha]', 'errada');
+await page.click('#auth [data-submit]');
+await wait(900);
+const erroLogin = await page.$eval('.auth__error', (e) => e.textContent);
+if (!erroLogin.includes('incorretos')) errors.push('Login com senha errada não mostrou erro');
+await page.screenshot({ path: `screens/auth-login${suffix}.png` });
+await page.type('#auth [name=senha]', 'segredo123');
+await page.click('#auth [data-submit]');
+await page.waitForSelector('.page', { timeout: 15000 });
+await wait(1200);
+const greet = await page.$eval('[data-greet]', (e) => e.textContent);
+if (!greet.includes('Olá, Matheus')) errors.push(`Saudação inesperada: ${greet}`);
+const temDados = await page.evaluate(async () => (await import('/js/store.js')).state.transacoes.length > 0);
+if (!temDados) errors.push('Dados do usuário não foram recarregados após login');
+await page.screenshot({ path: `screens/inicio-apos-login${suffix}.png` });
 await browser.close();
 server.kill();
 if (errors.length) {
