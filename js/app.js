@@ -1,5 +1,5 @@
-import { commit, initDB, load, state, subscribe } from './store.js';
-import { boasVindas, carregarUsuarios, sessaoSalva, telaLogin } from './auth.js';
+import { commit, dadosLocaisAntigos, load, state, subscribe } from './store.js';
+import { aguardarSessao, boasVindas, sair, telaLogin, usuarioAtual } from './auth.js';
 import { icon } from './icons.js';
 import { textMorph } from './textmorph.js';
 import { animateIn, closeSheet, initSheet, initSpotlight, openSheet, toast } from './ui.js';
@@ -256,7 +256,12 @@ function buildLock() {
   const el = document.getElementById('lock');
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
   el.innerHTML = `<span style="font-size:2.4rem">${temaAtual().emoji}</span><h2>Digite seu PIN</h2><div class="lock__dots"></div>
-    <div class="lock__pad">${keys.map((k) => (k ? `<button data-k="${k}" aria-label="${k === 'del' ? 'Apagar' : k}">${k === 'del' ? '⌫' : k}</button>` : '<span></span>')).join('')}</div>`;
+    <div class="lock__pad">${keys.map((k) => (k ? `<button data-k="${k}" aria-label="${k === 'del' ? 'Apagar' : k}">${k === 'del' ? '⌫' : k}</button>` : '<span></span>')).join('')}</div>
+    <button class="btn btn--ghost btn--sm" data-esqueci>Esqueci o PIN (entrar com a senha)</button>`;
+  el.querySelector('[data-esqueci]').addEventListener('click', async () => {
+    await sair();
+    location.reload();
+  });
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -288,7 +293,6 @@ function registerSW() {
 
 // ---------- Inicialização ----------
 async function boot() {
-  await initDB();
   applyTheme(localStorage.getItem('cp:tema') || 'ametista', false);
   shared.router = { onTheme: () => MODULES.forEach((m) => m.onTheme?.()) };
   const bg = new Background(document.getElementById('bg-canvas'));
@@ -296,28 +300,38 @@ async function boot() {
   bg.init();
   registerSW();
 
-  await carregarUsuarios();
-  let user = sessaoSalva();
+  let user = await aguardarSessao();
   const viaSessao = !!user;
-  let primeiro = false;
-  if (!user) ({ user, primeiro } = await telaLogin());
+  let nomeLogin = user?.displayName;
+  if (!user) ({ user, nome: nomeLogin } = await telaLogin());
 
-  await load(user.id, { migrarLegado: primeiro });
+  const carga = await load(user.uid);
+  if (carga.vazio && !carga.doCache) {
+    const antigos = await dadosLocaisAntigos(usuarioAtual().usuario);
+    if (antigos) {
+      Object.assign(state, antigos);
+      commit(...Object.keys(antigos));
+      toast('Seus dados deste aparelho foram enviados para a nuvem', { icon: '☁️', timeout: 5000 });
+    }
+  }
   if (!state.settings.nome) {
-    state.settings.nome = user.nome;
+    state.settings.nome = nomeLogin || usuarioAtual().nome;
     commit('settings');
   }
   applyTheme(state.settings.tema, !viaSessao);
   bg.setAnimate(state.settings.fundoAnimado);
   const unlocked = viaSessao ? lock() : Promise.resolve();
 
-  if (!viaSessao) await boasVindas(state.settings.nome || user.nome);
+  if (!viaSessao) await boasVindas(state.settings.nome);
   document.body.classList.remove('is-auth');
 
   initSheet();
   initSpotlight();
   buildNav();
-  subscribe(() => schedule(false));
+  subscribe((keys, origem) => {
+    if (origem === 'nuvem' && keys.includes('settings')) applyTheme(state.settings.tema);
+    schedule(false);
+  });
   window.addEventListener('hashchange', route);
   route();
   document.getElementById('today').textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'short' }).format(new Date());

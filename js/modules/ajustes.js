@@ -4,7 +4,7 @@ import { icon } from '../icons.js';
 import { confirmSheet, fields, invalid, openSheet, toast } from '../ui.js';
 import { TEMAS, applyTheme } from '../themes.js';
 import { shared } from '../shared.js';
-import { atualizarNome, contaParaBackup, hashSegredo, novoSalt, sair, trocarSenha, usuarioAtual } from '../auth.js';
+import { atualizarNome, hashSegredo, novoSalt, sair, trocarSenha, usuarioAtual } from '../auth.js';
 
 // ---------- PIN ----------
 export async function verifyPin(pin) {
@@ -16,7 +16,7 @@ export async function verifyPin(pin) {
 function openPin() {
   openSheet({
     title: state.settings.pinHash ? 'Trocar PIN' : 'Criar PIN',
-    body: `<p class="muted small" style="margin-bottom:12px">O PIN protege o app quando alguém pega seu celular. Ele fica só neste aparelho; se esquecer, será preciso apagar os dados do app no navegador.</p>
+    body: `<p class="muted small" style="margin-bottom:12px">O PIN protege o app quando alguém pega seu celular. Se esquecer, toque em "Esqueci o PIN" e entre de novo com sua senha.</p>
       ${fields([
         [
           { name: 'pin', label: 'PIN (4 a 8 números)', type: 'password', attrs: 'inputmode="numeric" autocomplete="new-password" maxlength="8"' },
@@ -106,7 +106,7 @@ export default {
 
       <section class="card section">
         <div class="card__title">Seus dados</div>
-        <p class="muted small" style="margin-bottom:12px">Tudo fica salvo só neste aparelho. Faça backup de vez em quando para não perder nada.</p>
+        <p class="muted small" style="margin-bottom:12px">☁️ Seus dados ficam na sua conta e sincronizam entre todos os aparelhos. O backup é uma cópia extra para guardar.</p>
         <div class="grid grid--2">
           <button class="btn" data-export>${icon('download')} Backup</button>
           <label class="btn" style="cursor:pointer">${icon('upload')} Restaurar<input type="file" accept="application/json,.json" data-import hidden></label>
@@ -154,7 +154,7 @@ export default {
     view.querySelector('[data-sair]').addEventListener('click', async () => {
       if (!(await confirmSheet('Sair da conta neste aparelho? Seus dados continuam salvos.', { okLabel: 'Sair', danger: false, title: 'Sair' }))) return;
       await flushNow();
-      sair();
+      await sair();
       location.hash = '';
       location.reload();
     });
@@ -186,7 +186,7 @@ export default {
     });
 
     view.querySelector('[data-export]').addEventListener('click', () => {
-      download(`controle-pessoal-backup-${todayISO()}.json`, JSON.stringify({ ...exportData(), conta: contaParaBackup() }, null, 2));
+      download(`controle-pessoal-backup-${todayISO()}.json`, JSON.stringify(exportData(), null, 2));
       toast('Backup baixado', { icon: '💾' });
     });
     view.querySelector('[data-csv]').addEventListener('click', exportCSV);
@@ -207,7 +207,7 @@ export default {
       }
     });
     view.querySelector('[data-reset]').addEventListener('click', async () => {
-      if (!(await confirmSheet('Isso apaga TODOS os dados do app neste aparelho. Faça um backup antes. Continuar?', { okLabel: 'Apagar tudo' }))) return;
+      if (!(await confirmSheet('Isso apaga TODOS os seus dados, em todos os aparelhos. Faça um backup antes. Continuar?', { okLabel: 'Apagar tudo' }))) return;
       resetAll();
       state.settings.nome = user?.nome || '';
       commit('settings');

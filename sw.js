@@ -1,5 +1,5 @@
 // Service worker: deixa o app funcionando offline. Troque VERSION ao publicar mudanças.
-const VERSION = 'cp-v3';
+const VERSION = 'cp-v4';
 const SHELL = [
   './',
   './index.html',
@@ -15,6 +15,10 @@ const SHELL = [
   './vendor/three.core.min.js',
   './js/app.js',
   './js/auth.js',
+  './js/cloud.js',
+  './vendor/firebase/firebase-app.js',
+  './vendor/firebase/firebase-auth.js',
+  './vendor/firebase/firebase-firestore.js',
   './js/store.js',
   './js/utils.js',
   './js/icons.js',

@@ -1,16 +1,20 @@
-// Contas locais: usuário + senha (PBKDF2) guardados no próprio aparelho, um espaço de dados por usuário.
-import { importarParaUsuario, rawGet, rawPut } from './store.js';
-import { reducedMotion, uid } from './utils.js';
+// Contas na nuvem (Firebase Authentication): o mesmo usuário e senha funcionam em qualquer aparelho.
+import { reducedMotion } from './utils.js';
 import { textMorph } from './textmorph.js';
-
-const AUTH_KEY = 'auth:usuarios';
-const SESSION_KEY = 'cp:sessao';
-
-let usuarios = [];
-let atual = null;
+import {
+  atualizarNomeNuvem,
+  auth,
+  cadastrarNaNuvem,
+  entrarNaNuvem,
+  sairDaNuvem,
+  sessaoAtual,
+  trocarSenhaNuvem,
+  usuarioDe,
+} from './cloud.js';
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
+// Usado pelo PIN de bloqueio rápido.
 export async function hashSegredo(segredo, saltHex) {
   const salt = Uint8Array.from(saltHex.match(/../g).map((h) => Number.parseInt(h, 16)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(segredo), 'PBKDF2', false, ['deriveBits']);
@@ -19,88 +23,42 @@ export async function hashSegredo(segredo, saltHex) {
 }
 
 export const novoSalt = () => hex(crypto.getRandomValues(new Uint8Array(16)));
-export const usuarioAtual = () => atual;
 
-export async function carregarUsuarios() {
-  const salvo = await rawGet(AUTH_KEY);
-  usuarios = Array.isArray(salvo) ? salvo : [];
-  return usuarios;
+export function usuarioAtual() {
+  const u = auth.currentUser;
+  return u ? { id: u.uid, usuario: usuarioDe(u.email), nome: u.displayName || usuarioDe(u.email) } : null;
 }
 
-const salvarUsuarios = () => rawPut(AUTH_KEY, usuarios);
+export const aguardarSessao = sessaoAtual;
+export const sair = () => sairDaNuvem();
 
-export function sessaoSalva() {
-  const id = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
-  atual = usuarios.find((u) => u.id === id) || null;
-  return atual;
+export async function trocarSenha(senhaAtual, nova) {
+  try {
+    await trocarSenhaNuvem(senhaAtual, nova);
+    return true;
+  } catch (err) {
+    if (['auth/invalid-credential', 'auth/wrong-password'].includes(err.code)) return false;
+    throw err;
+  }
 }
 
-function salvarSessao(id, manter) {
-  sessionStorage.setItem(SESSION_KEY, id);
-  if (manter) localStorage.setItem(SESSION_KEY, id);
-  else localStorage.removeItem(SESSION_KEY);
-}
-
-export function sair() {
-  localStorage.removeItem(SESSION_KEY);
-  sessionStorage.removeItem(SESSION_KEY);
-  atual = null;
-}
+export const atualizarNome = (nome) => atualizarNomeNuvem(nome);
 
 const normalizar = (u) => String(u || '').trim().toLowerCase();
 
-async function criarConta({ nome, usuario, senha }) {
-  const user = { id: uid(), nome, usuario: normalizar(usuario), salt: novoSalt(), criadoEm: new Date().toISOString() };
-  user.hash = await hashSegredo(senha, user.salt);
-  usuarios.push(user);
-  await salvarUsuarios();
-  return user;
-}
-
-async function entrar(usuario, senha) {
-  const user = usuarios.find((u) => u.usuario === normalizar(usuario));
-  if (!user) return { erro: 'naoExiste' };
-  return (await hashSegredo(senha, user.salt)) === user.hash ? { user } : { erro: 'senha' };
-}
-
-// Dados da conta que vão junto no backup, para poder entrar em outro aparelho com a mesma senha.
-export function contaParaBackup() {
-  if (!atual) return null;
-  const { usuario, nome, salt, hash } = atual;
-  return { usuario, nome, salt, hash };
-}
-
-async function importarConta(json) {
-  const c = json?.conta;
-  if (!c || !/^[a-z0-9._-]{3,20}$/.test(c.usuario) || !/^[0-9a-f]{32}$/.test(c.salt) || !/^[0-9a-f]{64}$/.test(c.hash)) {
-    throw new Error('Este backup não tem dados de conta. Crie a conta aqui e restaure o backup em Ajustes.');
-  }
-  if (usuarios.some((u) => u.usuario === c.usuario)) throw new Error(`O usuário @${c.usuario} já existe neste aparelho. É só entrar.`);
-  const user = { id: uid(), nome: String(c.nome || c.usuario).slice(0, 40), usuario: c.usuario, salt: c.salt, hash: c.hash, criadoEm: new Date().toISOString() };
-  await importarParaUsuario(user.id, json);
-  usuarios.push(user);
-  await salvarUsuarios();
-  return user;
-}
-
-export async function trocarSenha(senhaAtual, nova) {
-  if (!atual || (await hashSegredo(senhaAtual, atual.salt)) !== atual.hash) return false;
-  atual.salt = novoSalt();
-  atual.hash = await hashSegredo(nova, atual.salt);
-  await salvarUsuarios();
-  return true;
-}
-
-export async function atualizarNome(nome) {
-  if (!atual) return;
-  atual.nome = nome;
-  await salvarUsuarios();
-}
+const MENSAGENS = {
+  'auth/invalid-credential': 'Usuário ou senha incorretos.',
+  'auth/wrong-password': 'Usuário ou senha incorretos.',
+  'auth/user-not-found': 'Usuário ou senha incorretos.',
+  'auth/email-already-in-use': 'Esse usuário já existe. Escolha outro ou entre com ele.',
+  'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+  'auth/too-many-requests': 'Muitas tentativas. Espere um pouco e tente de novo.',
+  'auth/network-request-failed': 'Sem internet. Conecte-se para entrar neste aparelho.',
+};
 
 function validar(modo, v) {
   if (modo === 'cadastro' && v.nome.length < 2) return ['nome', 'Diga como quer ser chamado.'];
   if (!/^[a-z0-9._-]{3,20}$/.test(normalizar(v.usuario))) return ['usuario', 'Usuário: 3 a 20 letras, números, ponto, hífen ou _ (sem espaços).'];
-  if (modo === 'cadastro' && usuarios.some((u) => u.usuario === normalizar(v.usuario))) return ['usuario', 'Esse usuário já existe neste aparelho.'];
   if (v.senha.length < (modo === 'cadastro' ? 6 : 1)) return ['senha', modo === 'cadastro' ? 'A senha precisa ter pelo menos 6 caracteres.' : 'Digite sua senha.'];
   if (modo === 'cadastro' && v.senha !== v.senha2) return ['senha2', 'As senhas não conferem.'];
   return null;
@@ -109,7 +67,7 @@ function validar(modo, v) {
 // Mostra a tela de entrar/criar conta e resolve com o usuário autenticado.
 export function telaLogin() {
   const el = document.getElementById('auth');
-  let modo = usuarios.length ? 'login' : 'cadastro';
+  let modo = localStorage.getItem('cp:jaEntrou') ? 'login' : 'cadastro';
   el.innerHTML = `
     <div class="auth__card">
       <img src="icons/icon.svg" alt="" class="auth__logo" width="64" height="64">
@@ -125,24 +83,21 @@ export function telaLogin() {
         <button class="btn btn--primary btn--block" type="submit" data-submit></button>
       </form>
       <button class="btn btn--ghost btn--block" type="button" data-toggle></button>
-      <label class="btn btn--ghost btn--block btn--sm" style="cursor:pointer">📦 Trazer conta de outro aparelho (backup)<input type="file" accept="application/json,.json" data-backup hidden></label>
-      <p class="auth__note">🔒 As contas ficam salvas só no aparelho onde foram criadas. Para usar em outro celular ou navegador, baixe o backup em Ajustes e traga ele por aqui. A senha não pode ser recuperada.</p>
+      <p class="auth__note">☁️ Sua conta fica na nuvem: entre com o mesmo usuário e senha no celular, no computador ou em qualquer navegador. A senha não pode ser recuperada, então guarde bem.</p>
     </div>`;
   el.hidden = false;
 
   const form = el.querySelector('form');
   const erro = el.querySelector('.auth__error');
+  const btn = el.querySelector('[data-submit]');
+  const rotulo = () => (modo === 'cadastro' ? 'Criar conta e entrar' : 'Entrar');
   const aplicarModo = (animar) => {
     const cadastro = modo === 'cadastro';
     el.querySelectorAll('[data-cadastro]').forEach((f) => (f.hidden = !cadastro));
     form.senha.autocomplete = cadastro ? 'new-password' : 'current-password';
     textMorph(el.querySelector('[data-title]'), cadastro ? 'Criar sua conta' : 'Bem-vindo de volta');
-    el.querySelector('[data-sub]').textContent = cadastro
-      ? 'Leva 10 segundos. Depois é só entrar.'
-      : usuarios.length
-        ? 'Entre com seu usuário e senha.'
-        : 'Nenhuma conta salva neste aparelho ainda. Crie uma ou traga o backup de outro aparelho.';
-    el.querySelector('[data-submit]').textContent = cadastro ? 'Criar conta e entrar' : 'Entrar';
+    el.querySelector('[data-sub]').textContent = cadastro ? 'Leva 10 segundos. Depois é só entrar em qualquer aparelho.' : 'Entre com seu usuário e senha.';
+    btn.textContent = rotulo();
     el.querySelector('[data-toggle]').textContent = cadastro ? 'Já tenho conta. Entrar' : 'Não tem conta? Criar conta';
     erro.textContent = '';
     if (animar && window.gsap && !reducedMotion()) window.gsap.from(form.querySelectorAll('.field:not([hidden])'), { y: 10, opacity: 0, stagger: 0.05, duration: 0.4, ease: 'power3.out' });
@@ -154,23 +109,6 @@ export function telaLogin() {
   el.querySelector('[data-toggle]').addEventListener('click', () => {
     modo = modo === 'login' ? 'cadastro' : 'login';
     aplicarModo(true);
-  });
-
-  el.querySelector('[data-backup]').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      if (file.size > 20 * 1024 * 1024) throw new Error('Arquivo grande demais.');
-      const user = await importarConta(JSON.parse(await file.text()));
-      modo = 'login';
-      aplicarModo(true);
-      form.usuario.value = user.usuario;
-      form.senha.focus();
-      el.querySelector('[data-sub]').textContent = `Conta @${user.usuario} trazida com sucesso! Agora entre com a sua senha.`;
-    } catch (err) {
-      erro.textContent = err instanceof SyntaxError ? 'Arquivo de backup inválido.' : err.message;
-    }
   });
 
   return new Promise((resolve) => {
@@ -186,33 +124,34 @@ export function telaLogin() {
         return;
       }
       ocupado = true;
-      const btn = el.querySelector('[data-submit]');
       btn.disabled = true;
-      const primeiro = !usuarios.length;
-      const res = modo === 'cadastro' ? { user: await criarConta(v) } : await entrar(v.usuario, v.senha);
-      const user = res.user;
-      btn.disabled = false;
-      ocupado = false;
-      if (!user) {
-        erro.textContent =
-          res.erro === 'naoExiste'
-            ? 'Usuário não encontrado neste aparelho. A conta fica salva onde foi criada: crie uma aqui ou traga o backup.'
-            : 'Senha incorreta.';
+      btn.textContent = modo === 'cadastro' ? 'Criando conta…' : 'Entrando…';
+      erro.textContent = '';
+      const usuario = normalizar(v.usuario);
+      try {
+        const user =
+          modo === 'cadastro'
+            ? await cadastrarNaNuvem(usuario, v.senha, v.nome, form.manter.checked)
+            : await entrarNaNuvem(usuario, v.senha, form.manter.checked);
+        localStorage.setItem('cp:jaEntrou', '1');
+        const fim = () => {
+          el.hidden = true;
+          el.innerHTML = '';
+          el.style.opacity = '';
+        };
+        if (window.gsap && !reducedMotion()) window.gsap.to(el, { opacity: 0, duration: 0.35, onComplete: fim });
+        else fim();
+        resolve({ user, novo: modo === 'cadastro', nome: modo === 'cadastro' ? v.nome : user.displayName });
+      } catch (err) {
+        console.warn(err.code || err);
+        erro.textContent = MENSAGENS[err.code] || 'Não foi possível entrar agora. Tente de novo.';
         form.senha.value = '';
-        (res.erro === 'naoExiste' ? form.usuario : form.senha).focus();
+        form.senha.focus();
         if (window.gsap) window.gsap.fromTo(el.querySelector('.auth__card'), { x: -8 }, { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)' });
-        return;
+        btn.disabled = false;
+        btn.textContent = rotulo();
+        ocupado = false;
       }
-      atual = user;
-      salvarSessao(user.id, form.manter.checked);
-      const fim = () => {
-        el.hidden = true;
-        el.innerHTML = '';
-        el.style.opacity = '';
-      };
-      if (window.gsap && !reducedMotion()) window.gsap.to(el, { opacity: 0, duration: 0.35, onComplete: fim });
-      else fim();
-      resolve({ user, primeiro, novo: modo === 'cadastro' });
     });
   });
 }

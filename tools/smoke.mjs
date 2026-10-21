@@ -25,27 +25,31 @@ const errors = [];
 const page = await browser.newPage();
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(`console: ${m.text()}`);
+  // 400 esperado no teste de senha errada
+  if (m.type() === 'error' && !m.text().includes('status of 400')) errors.push(`console: ${m.text()}`);
 });
 page.on('requestfailed', (r) => {
-  if (!r.url().includes('fonts.g')) errors.push(`requestfailed: ${r.url()}`);
+  if (!r.url().includes('fonts.g') && !r.url().includes('googleapis.com')) errors.push(`requestfailed: ${r.url()}`);
 });
 
 const desktop = process.argv.includes('--desktop');
 await page.setViewport(desktop ? { width: 1366, height: 860, deviceScaleFactor: 1 } : { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 const suffixAuth = process.argv.includes('--desktop') ? '-desktop' : '';
+// Usuário temporário na nuvem (apagado no final do teste)
+const USER = `smoke${Date.now().toString(36)}`;
+const SENHA = 'segredo123';
 await page.waitForSelector('#auth form');
 await new Promise((r) => setTimeout(r, 900));
 await page.screenshot({ path: `screens/auth-cadastro${suffixAuth}.png` });
 await page.type('#auth [name=nome]', 'Matheus');
-await page.type('#auth [name=usuario]', 'matheus');
-await page.type('#auth [name=senha]', 'segredo123');
-await page.type('#auth [name=senha2]', 'segredo123');
+await page.type('#auth [name=usuario]', USER);
+await page.type('#auth [name=senha]', SENHA);
+await page.type('#auth [name=senha2]', SENHA);
 await page.click('#auth [data-submit]');
-await new Promise((r) => setTimeout(r, 1900));
+await new Promise((r) => setTimeout(r, 3500));
 await page.screenshot({ path: `screens/boas-vindas${suffixAuth}.png` });
-await page.waitForSelector('.page', { timeout: 15000 });
+await page.waitForSelector('.page', { timeout: 20000 });
 
 // Dados de exemplo usando os próprios módulos do app
 await page.evaluate(async () => {
@@ -163,22 +167,26 @@ const renderer = await page.evaluate(() => document.documentElement.dataset.rend
 console.log('renderer:', renderer);
 
 // Sair e entrar de novo: senha errada deve falhar, a certa deve abrir o app com os mesmos dados
-await page.evaluate(() => {
-  localStorage.removeItem('cp:sessao');
-  sessionStorage.removeItem('cp:sessao');
-});
+const sincronizar = (p) =>
+  p.evaluate(async () => {
+    await (await import('/js/store.js')).flushNow();
+    const { waitForPendingWrites } = await import('/vendor/firebase/firebase-firestore.js');
+    await waitForPendingWrites((await import('/js/cloud.js')).db);
+  });
+await sincronizar(page);
+await page.evaluate(async () => (await import('/js/auth.js')).sair());
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 await page.waitForSelector('#auth form');
-await page.type('#auth [name=usuario]', 'matheus');
+await page.type('#auth [name=usuario]', USER);
 await page.type('#auth [name=senha]', 'errada');
 await page.click('#auth [data-submit]');
-await wait(900);
+await page.waitForFunction(() => document.querySelector('.auth__error')?.textContent.length > 0, { timeout: 15000 });
 const erroLogin = await page.$eval('.auth__error', (e) => e.textContent);
-if (!erroLogin.includes('Senha incorreta')) errors.push('Login com senha errada não mostrou erro');
+if (!erroLogin.includes('incorretos')) errors.push(`Login com senha errada: "${erroLogin}"`);
 await page.screenshot({ path: `screens/auth-login${suffix}.png` });
-await page.type('#auth [name=senha]', 'segredo123');
+await page.type('#auth [name=senha]', SENHA);
 await page.click('#auth [data-submit]');
-await page.waitForSelector('.page', { timeout: 15000 });
+await page.waitForSelector('.page', { timeout: 20000 });
 await wait(1200);
 const greet = await page.$eval('[data-greet]', (e) => e.textContent);
 if (!greet.includes('Olá, Matheus')) errors.push(`Saudação inesperada: ${greet}`);
@@ -186,15 +194,7 @@ const temDados = await page.evaluate(async () => (await import('/js/store.js')).
 if (!temDados) errors.push('Dados do usuário não foram recarregados após login');
 await page.screenshot({ path: `screens/inicio-apos-login${suffix}.png` });
 
-// Levar a conta para "outro aparelho" (perfil limpo) via backup
-const backup = await page.evaluate(async () => {
-  const { exportData } = await import('/js/store.js');
-  const { contaParaBackup } = await import('/js/auth.js');
-  return JSON.stringify({ ...exportData(), conta: contaParaBackup() });
-});
-const { writeFileSync } = await import('node:fs');
-const { resolve } = await import('node:path');
-writeFileSync('screens/backup.json', backup);
+// "Outro aparelho" (perfil limpo): mesmo usuário e senha devem trazer os dados da nuvem
 const ctx2 = await browser.createBrowserContext();
 const p2 = await ctx2.newPage();
 p2.on('pageerror', (e) => errors.push(`pageerror(2): ${e.message}`));
@@ -203,16 +203,34 @@ await p2.goto(BASE, { waitUntil: 'networkidle0' });
 await p2.waitForSelector('#auth form');
 await p2.click('#auth [data-toggle]');
 await wait(500);
-await p2.screenshot({ path: `screens/auth-login-vazio${suffix}.png` });
-const input = await p2.$('#auth [data-backup]');
-await input.uploadFile(resolve('screens/backup.json'));
-await wait(800);
-await p2.type('#auth [name=senha]', 'segredo123');
+await p2.type('#auth [name=usuario]', USER);
+await p2.type('#auth [name=senha]', SENHA);
+await p2.screenshot({ path: `screens/auth-outro-aparelho${suffix}.png` });
 await p2.click('#auth [data-submit]');
-await p2.waitForSelector('.page', { timeout: 15000 });
-const migrou = await p2.evaluate(async () => (await import('/js/store.js')).state.transacoes.length > 0);
-if (!migrou) errors.push('Backup não trouxe os dados para o outro aparelho');
+await p2.waitForSelector('.page', { timeout: 20000 });
+const nuvem = await p2.evaluate(async () => {
+  const { state } = await import('/js/store.js');
+  return { tx: state.transacoes.length, tema: state.settings.tema, padaria: state.transacoes.some((t) => t.descricao === 'Padaria') };
+});
+if (!nuvem.tx || !nuvem.padaria) errors.push(`Outro aparelho não recebeu os dados: ${JSON.stringify(nuvem)}`);
+
+// Sincronização ao vivo: gasto criado no aparelho 2 aparece no aparelho 1
+await p2.evaluate(async () => {
+  const { addTransaction } = await import('/js/modules/financas.js');
+  addTransaction({ tipo: 'despesa', valor: 12.34, descricao: 'Sync ao vivo', categoria: 'outros' });
+});
+await sincronizar(p2);
+await page.waitForFunction(async () => (await import('/js/store.js')).state.transacoes.some((t) => t.descricao === 'Sync ao vivo'), { timeout: 20000, polling: 500 }).catch(() => errors.push('Sincronização ao vivo não chegou no aparelho 1'));
 await ctx2.close();
+
+// Limpeza: apaga os dados e o usuário temporário
+await page.evaluate(async () => {
+  const { auth, apagarChave } = await import('/js/cloud.js');
+  const { KEYS, descarregar } = await import('/js/store.js');
+  descarregar();
+  for (const k of KEYS) await apagarChave(auth.currentUser.uid, k);
+  await auth.currentUser.delete();
+}).catch((e) => errors.push(`Limpeza falhou: ${e.message}`));
 await browser.close();
 server.kill();
 if (errors.length) {

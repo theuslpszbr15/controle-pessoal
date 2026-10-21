@@ -1,4 +1,7 @@
-// Persistência local (IndexedDB, com fallback para localStorage). Nada sai do aparelho.
+// Dados do usuário: Firestore (sincroniza entre aparelhos e funciona offline).
+// O IndexedDB local só é lido para migrar dados da versão antiga, que era só local.
+import { colecaoDados, onSnapshot, salvarChave } from './cloud.js';
+
 const DB_NAME = 'controle-pessoal';
 const STORE = 'kv';
 const LS_PREFIX = 'cp:';
@@ -106,23 +109,78 @@ export async function rawPut(key, value) {
   else localStorage.setItem(LS_PREFIX + key, JSON.stringify(value));
 }
 
-// Cada usuário tem suas próprias chaves: "u:<id>:<chave>".
-const userKey = (key) => `u:${userId}:${key}`;
-
-export async function load(id, { migrarLegado = false } = {}) {
-  userId = id;
+const normalizar = (key, value) => {
   const base = defaults();
+  if (value === undefined || value === null) return base[key];
+  if (key === 'settings') return { ...base.settings, ...value, foco: { ...base.settings.foco, ...value.foco } };
+  return value;
+};
+
+let unsubscribe = null;
+
+// Carrega os dados do usuário da nuvem (com cache offline) e fica ouvindo mudanças de outros aparelhos.
+export function load(uid) {
+  userId = uid;
+  unsubscribe?.();
+  return new Promise((resolve) => {
+    let primeiro = true;
+    unsubscribe = onSnapshot(
+      colecaoDados(uid),
+      (snap) => {
+        const mudou = [];
+        snap.docChanges().forEach((ch) => {
+          const key = ch.doc.id;
+          if (!KEYS.includes(key) || ch.doc.metadata.hasPendingWrites || pending.has(key)) return;
+          try {
+            state[key] = normalizar(key, ch.type === 'removed' ? null : JSON.parse(ch.doc.data().v));
+            mudou.push(key);
+          } catch (err) {
+            console.error('Dado inválido na nuvem', key, err);
+          }
+        });
+        if (primeiro) {
+          primeiro = false;
+          const recebidas = new Set(snap.docs.map((d) => d.id));
+          for (const key of KEYS) if (!recebidas.has(key)) state[key] = normalizar(key, null);
+          resolve({ vazio: snap.empty, doCache: snap.metadata.fromCache });
+        } else if (mudou.length) {
+          listeners.forEach((fn) => fn(mudou, 'nuvem'));
+        }
+      },
+      (err) => {
+        console.error('Erro de sincronização', err);
+        if (primeiro) {
+          primeiro = false;
+          for (const key of KEYS) state[key] = normalizar(key, null);
+          resolve({ vazio: true, doCache: true, erro: err });
+        }
+      },
+    );
+  });
+}
+
+export function descarregar() {
+  unsubscribe?.();
+  unsubscribe = null;
+  userId = null;
+}
+
+// Dados salvos só neste aparelho pela versão antiga (antes do login na nuvem).
+export async function dadosLocaisAntigos(usuario) {
+  const contas = (await rawGet('auth:usuarios')) || [];
+  const conta = Array.isArray(contas) ? contas.find((u) => u.usuario === usuario) : null;
+  const prefixo = conta ? `u:${conta.id}:` : '';
+  if (!conta && contas.length) return null;
+  const dados = {};
+  let achou = false;
   for (const key of KEYS) {
-    let value = await rawGet(userKey(key));
-    if ((value === undefined || value === null) && migrarLegado) {
-      value = await rawGet(key);
-      if (value !== undefined && value !== null) await rawPut(userKey(key), value);
+    const v = await rawGet(prefixo + key);
+    if (v !== undefined && v !== null) {
+      dados[key] = v;
+      achou = true;
     }
-    if (value === undefined || value === null) state[key] = base[key];
-    else if (key === 'settings') state[key] = { ...base.settings, ...value, foco: { ...base.settings.foco, ...value.foco } };
-    else state[key] = value;
   }
-  return state;
+  return achou ? dados : null;
 }
 
 const pending = new Set();
@@ -131,15 +189,16 @@ let flushTimer = null;
 async function flush() {
   flushTimer = null;
   if (!userId) return;
+  const uid = userId;
   const keys = [...pending];
   pending.clear();
-  for (const key of keys) {
-    try {
-      await rawPut(userKey(key), structuredClone(state[key]));
-    } catch (err) {
-      console.error('Falha ao salvar', key, err);
-    }
-  }
+  await Promise.all(
+    keys.map((key) =>
+      salvarChave(uid, key, state[key]).catch((err) => {
+        console.error('Falha ao salvar', key, err);
+      }),
+    ),
+  );
 }
 
 export async function flushNow() {
@@ -147,11 +206,11 @@ export async function flushNow() {
   await flush();
 }
 
-// Marca chaves alteradas, grava em lote e avisa a interface.
+// Marca chaves alteradas, grava em lote (cache local na hora, nuvem quando houver internet) e avisa a interface.
 export function commit(...keys) {
   keys.forEach((k) => pending.add(k));
-  if (!flushTimer) flushTimer = setTimeout(flush, 120);
-  listeners.forEach((fn) => fn(keys));
+  if (!flushTimer) flushTimer = setTimeout(flush, 250);
+  listeners.forEach((fn) => fn(keys, 'local'));
 }
 
 export function subscribe(fn) {
@@ -191,12 +250,6 @@ export function importData(json) {
   const dados = validarBackup(json);
   Object.assign(state, dados);
   commit(...KEYS);
-}
-
-// Grava um backup direto no espaço de outro usuário (usado ao trazer a conta de outro aparelho).
-export async function importarParaUsuario(id, json) {
-  const dados = validarBackup(json);
-  for (const [key, value] of Object.entries(dados)) await rawPut(`u:${id}:${key}`, value);
 }
 
 export function resetAll() {
