@@ -1,0 +1,131 @@
+@use 'sass:color';
+@use 'sass:map';
+@use 'sass:math';
+
+// Cada tema define a paleta, a fonte de título, o raio dos cantos e o estilo do fundo animado.
+// fx-mode: 0 = manchas suaves, 1 = curvas de nível (topográfico), 2 = ondas.
+$themes: (
+  ametista: (
+    scheme: dark, bg: #14101b, surface: #1d1727, text: #ece6f5, muted: #a59bb6,
+    accent: #a48bd9, accent-2: #d3a1bf, success: #8fbf9a, warning: #dcb06c, danger: #df8c8c,
+    fx-1: #3a2959, fx-2: #563c74, fx-3: #262f4a, fx-mode: 0,
+    font: "'Fraunces', Georgia, serif", radius: 22px,
+  ),
+  lavanda: (
+    scheme: light, bg: #f3f0f9, surface: #ffffff, text: #29223a, muted: #6f6684,
+    accent: #7556c2, accent-2: #c0809f, success: #3f8a5c, warning: #b5832e, danger: #c0504f,
+    fx-1: #ddd2f3, fx-2: #e9dbef, fx-3: #d6def3, fx-mode: 0,
+    font: "'Fraunces', Georgia, serif", radius: 22px,
+  ),
+  oceano: (
+    scheme: dark, bg: #0d151e, surface: #14202c, text: #e3edf3, muted: #93a7b5,
+    accent: #6ea7c6, accent-2: #8dc4b6, success: #86c0a0, warning: #d9b46f, danger: #de8a86,
+    fx-1: #15314a, fx-2: #1b4359, fx-3: #11373b, fx-mode: 2,
+    font: "'Space Grotesk', system-ui, sans-serif", radius: 18px,
+  ),
+  floresta: (
+    scheme: dark, bg: #111915, surface: #19241d, text: #e6eee5, muted: #9fb09f,
+    accent: #93b88c, accent-2: #d3b483, success: #93b88c, warning: #d3b483, danger: #d98b80,
+    fx-1: #1f3426, fx-2: #2a4531, fx-3: #363824, fx-mode: 1,
+    font: "'Fraunces', Georgia, serif", radius: 20px,
+  ),
+  terracota: (
+    scheme: light, bg: #f5ede4, surface: #fffaf4, text: #382920, muted: #7d6a5c,
+    accent: #b9643f, accent-2: #6b876a, success: #4f845a, warning: #b07d2c, danger: #b5473f,
+    fx-1: #edd4bf, fx-2: #e7c4a8, fx-3: #dfd9c4, fx-mode: 0,
+    font: "'DM Serif Display', Georgia, serif", radius: 16px,
+  ),
+  papel: (
+    scheme: light, bg: #f4f3ee, surface: #ffffff, text: #1e1e1b, muted: #6f6d66,
+    accent: #2e2e2a, accent-2: #b06d3c, success: #47805a, warning: #a97b2c, danger: #b24b42,
+    fx-1: #e7e5dc, fx-2: #dedbd0, fx-3: #ecebe5, fx-mode: 1,
+    font: "'DM Serif Display', Georgia, serif", radius: 10px,
+  ),
+  grafite: (
+    scheme: dark, bg: #111111, surface: #1a1a1a, text: #ecebe8, muted: #9c9a95,
+    accent: #d8d5ce, accent-2: #a7a39b, success: #9cbf9f, warning: #d4b276, danger: #d88b84,
+    fx-1: #232323, fx-2: #2d2d2d, fx-3: #1c1c1c, fx-mode: 1,
+    font: "'Space Grotesk', system-ui, sans-serif", radius: 14px,
+  ),
+  sakura: (
+    scheme: light, bg: #fbf2f2, surface: #ffffff, text: #3a2a2f, muted: #85707a,
+    accent: #c26a86, accent-2: #7f95c4, success: #4f8a66, warning: #b4842f, danger: #bf4c55,
+    fx-1: #f5dbe1, fx-2: #f0d0d8, fx-3: #e6e1f2, fx-mode: 0,
+    font: "'Fraunces', Georgia, serif", radius: 24px,
+  ),
+  meia-noite: (
+    scheme: dark, bg: #0c111e, surface: #141b2c, text: #e8e9f0, muted: #9ba2b8,
+    accent: #d2ae68, accent-2: #8e9fc8, success: #8fc0a0, warning: #d2ae68, danger: #dd8a8a,
+    fx-1: #19233f, fx-2: #222e50, fx-3: #2a2938, fx-mode: 2,
+    font: "'DM Serif Display', Georgia, serif", radius: 18px,
+  ),
+  cafe: (
+    scheme: dark, bg: #19140f, surface: #231c16, text: #f0e7dd, muted: #b0a08f,
+    accent: #c9a07a, accent-2: #9cae8f, success: #9cb78c, warning: #d6a964, danger: #d68b7c,
+    fx-1: #392a1f, fx-2: #2d2219, fx-3: #3e3328, fx-mode: 1,
+    font: "'Fraunces', Georgia, serif", radius: 20px,
+  ),
+);
+
+@function alpha($c, $a) {
+  @return color.change($c, $alpha: $a);
+}
+
+@function if-dark($dark, $a, $b) {
+  @if $dark {
+    @return $a;
+  }
+  @return $b;
+}
+
+@function on-color($c) {
+  @if color.channel($c, 'lightness', $space: hsl) > 58% {
+    @return #17131c;
+  }
+  @return #ffffff;
+}
+
+@each $name, $t in $themes {
+  $dark: map.get($t, scheme) == dark;
+  $bg: map.get($t, bg);
+  $surface: map.get($t, surface);
+  $text: map.get($t, text);
+  $accent: map.get($t, accent);
+  $accent-2: map.get($t, accent-2);
+
+  [data-theme='#{$name}'] {
+    color-scheme: map.get($t, scheme);
+    --bg: #{$bg};
+    --surface: #{alpha($surface, if-dark($dark, 0.72, 0.78))};
+    --surface-solid: #{$surface};
+    --surface-2: #{color.mix($text, $surface, 6%)};
+    --surface-3: #{color.mix($text, $surface, 11%)};
+    --border: #{alpha($text, 0.09)};
+    --border-strong: #{alpha($text, 0.18)};
+    --text: #{$text};
+    --muted: #{map.get($t, muted)};
+    --accent: #{$accent};
+    --accent-soft: #{alpha($accent, 0.16)};
+    --accent-line: #{alpha($accent, 0.4)};
+    --on-accent: #{on-color($accent)};
+    --accent-2: #{$accent-2};
+    --accent-2-soft: #{alpha($accent-2, 0.16)};
+    --success: #{map.get($t, success)};
+    --success-soft: #{alpha(map.get($t, success), 0.16)};
+    --warning: #{map.get($t, warning)};
+    --warning-soft: #{alpha(map.get($t, warning), 0.18)};
+    --danger: #{map.get($t, danger)};
+    --danger-soft: #{alpha(map.get($t, danger), 0.16)};
+    --font-display: #{map.get($t, font)};
+    --radius: #{map.get($t, radius)};
+    --radius-sm: #{math.round(math.div(map.get($t, radius), 2))};
+    --shadow: #{if-dark($dark, 0 18px 40px -18px rgba(0, 0, 0, 0.6), 0 18px 40px -22px alpha(color.mix($text, $bg, 60%), 0.35))};
+    --glass-blur: #{if-dark($dark, 18px, 14px)};
+    --fx-bg: #{$bg};
+    --fx-1: #{map.get($t, fx-1)};
+    --fx-2: #{map.get($t, fx-2)};
+    --fx-3: #{map.get($t, fx-3)};
+    --fx-mode: #{map.get($t, fx-mode)};
+    --fx-dark: #{if-dark($dark, 1, 0)};
+  }
+}

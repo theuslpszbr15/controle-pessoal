@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self'; base-uri 'self'; form-action 'self'">
+  <title>Controle Pessoal</title>
+  <meta name="description" content="Seu app de controle pessoal: finanças, tarefas, hábitos, agenda, compras, notas e foco.">
+  <meta name="theme-color" content="#14101b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Controle">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="vendor/gsap.min.js" defer></script>
+  <script src="vendor/matter.min.js" defer></script>
+  <script src="js/app.js" type="module"></script>
+</head>
+<body data-theme="ametista">
+  <div class="bg-fallback" aria-hidden="true"></div>
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+  <!-- Filtro de limiar usado pelo text morph -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <filter id="tm-threshold">
+      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 255 -140"/>
+    </filter>
+  </svg>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <img src="icons/icon.svg" alt="" width="30" height="30">
+        <span>Controle Pessoal</span>
+      </div>
+      <nav id="sidebar-links" aria-label="Seções"></nav>
+      <div class="sidebar__foot">Dados salvos só neste aparelho.</div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar__title">
+          <span class="topbar__eyebrow" id="today"></span>
+          <h1 id="page-title">Controle Pessoal</h1>
+        </div>
+        <div class="topbar__actions">
+          <button class="icon-btn" id="theme-btn" aria-label="Trocar tema">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+          </button>
+        </div>
+      </header>
+      <main id="view" class="view" tabindex="-1"></main>
+    </div>
+
+    <nav class="tabbar" id="tabbar" aria-label="Navegação principal"></nav>
+    <button class="fab fab--desktop" data-fab aria-label="Adicionar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  </div>
+
+  <dialog id="sheet" class="sheet" aria-label="Painel"></dialog>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <canvas id="fall-canvas" aria-hidden="true"></canvas>
+  <div id="lock" class="lock" hidden></div>
+
+  <noscript><p style="padding:24px">Ative o JavaScript para usar o Controle Pessoal.</p></noscript>
+</body>
+</html>

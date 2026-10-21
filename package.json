@@ -1,0 +1,22 @@
+{
+  "name": "controle-pessoal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App de controle pessoal (PWA): finanças, tarefas, hábitos, agenda, compras, notas e foco.",
+  "type": "module",
+  "scripts": {
+    "build:css": "sass scss/main.scss css/app.css --style=compressed --no-source-map",
+    "watch:css": "sass scss/main.scss css/app.css --watch --no-source-map",
+    "vendor": "node tools/vendor.mjs",
+    "icons": "node tools/icons.mjs",
+    "build": "npm run vendor && npm run build:css",
+    "start": "node tools/serve.mjs",
+    "test": "node tools/smoke.mjs && node tools/smoke.mjs --desktop"
+  },
+  "devDependencies": {
+    "gsap": "^3.13.0",
+    "matter-js": "^0.20.0",
+    "sass": "^1.89.0",
+    "three": "^0.180.0"
+  }
+}
