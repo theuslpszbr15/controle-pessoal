@@ -169,11 +169,12 @@ export function exportData() {
   return { app: 'controle-pessoal', versao: 1, exportadoEm: new Date().toISOString(), dados: data };
 }
 
-export function importData(json) {
+function validarBackup(json) {
   if (!json || json.app !== 'controle-pessoal' || typeof json.dados !== 'object') {
     throw new Error('Arquivo de backup inválido.');
   }
   const base = defaults();
+  const out = {};
   for (const key of KEYS) {
     const incoming = json.dados[key];
     if (incoming === undefined) continue;
@@ -181,9 +182,21 @@ export function importData(json) {
     if (expectArray !== Array.isArray(incoming) || typeof incoming !== 'object' || incoming === null) {
       throw new Error(`Campo "${key}" com formato inválido.`);
     }
-    state[key] = key === 'settings' ? { ...base.settings, ...incoming } : incoming;
+    out[key] = key === 'settings' ? { ...base.settings, ...incoming } : incoming;
   }
+  return out;
+}
+
+export function importData(json) {
+  const dados = validarBackup(json);
+  Object.assign(state, dados);
   commit(...KEYS);
+}
+
+// Grava um backup direto no espaço de outro usuário (usado ao trazer a conta de outro aparelho).
+export async function importarParaUsuario(id, json) {
+  const dados = validarBackup(json);
+  for (const [key, value] of Object.entries(dados)) await rawPut(`u:${id}:${key}`, value);
 }
 
 export function resetAll() {

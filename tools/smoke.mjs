@@ -174,7 +174,7 @@ await page.type('#auth [name=senha]', 'errada');
 await page.click('#auth [data-submit]');
 await wait(900);
 const erroLogin = await page.$eval('.auth__error', (e) => e.textContent);
-if (!erroLogin.includes('incorretos')) errors.push('Login com senha errada não mostrou erro');
+if (!erroLogin.includes('Senha incorreta')) errors.push('Login com senha errada não mostrou erro');
 await page.screenshot({ path: `screens/auth-login${suffix}.png` });
 await page.type('#auth [name=senha]', 'segredo123');
 await page.click('#auth [data-submit]');
@@ -185,6 +185,34 @@ if (!greet.includes('Olá, Matheus')) errors.push(`Saudação inesperada: ${gree
 const temDados = await page.evaluate(async () => (await import('/js/store.js')).state.transacoes.length > 0);
 if (!temDados) errors.push('Dados do usuário não foram recarregados após login');
 await page.screenshot({ path: `screens/inicio-apos-login${suffix}.png` });
+
+// Levar a conta para "outro aparelho" (perfil limpo) via backup
+const backup = await page.evaluate(async () => {
+  const { exportData } = await import('/js/store.js');
+  const { contaParaBackup } = await import('/js/auth.js');
+  return JSON.stringify({ ...exportData(), conta: contaParaBackup() });
+});
+const { writeFileSync } = await import('node:fs');
+const { resolve } = await import('node:path');
+writeFileSync('screens/backup.json', backup);
+const ctx2 = await browser.createBrowserContext();
+const p2 = await ctx2.newPage();
+p2.on('pageerror', (e) => errors.push(`pageerror(2): ${e.message}`));
+await p2.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await p2.goto(BASE, { waitUntil: 'networkidle0' });
+await p2.waitForSelector('#auth form');
+await p2.click('#auth [data-toggle]');
+await wait(500);
+await p2.screenshot({ path: `screens/auth-login-vazio${suffix}.png` });
+const input = await p2.$('#auth [data-backup]');
+await input.uploadFile(resolve('screens/backup.json'));
+await wait(800);
+await p2.type('#auth [name=senha]', 'segredo123');
+await p2.click('#auth [data-submit]');
+await p2.waitForSelector('.page', { timeout: 15000 });
+const migrou = await p2.evaluate(async () => (await import('/js/store.js')).state.transacoes.length > 0);
+if (!migrou) errors.push('Backup não trouxe os dados para o outro aparelho');
+await ctx2.close();
 await browser.close();
 server.kill();
 if (errors.length) {

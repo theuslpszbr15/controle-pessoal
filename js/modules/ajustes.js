@@ -4,7 +4,7 @@ import { icon } from '../icons.js';
 import { confirmSheet, fields, invalid, openSheet, toast } from '../ui.js';
 import { TEMAS, applyTheme } from '../themes.js';
 import { shared } from '../shared.js';
-import { atualizarNome, hashSegredo, novoSalt, sair, trocarSenha, usuarioAtual } from '../auth.js';
+import { atualizarNome, contaParaBackup, hashSegredo, novoSalt, sair, trocarSenha, usuarioAtual } from '../auth.js';
 
 // ---------- PIN ----------
 export async function verifyPin(pin) {
@@ -186,7 +186,7 @@ export default {
     });
 
     view.querySelector('[data-export]').addEventListener('click', () => {
-      download(`controle-pessoal-backup-${todayISO()}.json`, JSON.stringify(exportData(), null, 2));
+      download(`controle-pessoal-backup-${todayISO()}.json`, JSON.stringify({ ...exportData(), conta: contaParaBackup() }, null, 2));
       toast('Backup baixado', { icon: '💾' });
     });
     view.querySelector('[data-csv]').addEventListener('click', exportCSV);

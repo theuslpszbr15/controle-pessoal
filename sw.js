@@ -1,5 +1,5 @@
 // Service worker: deixa o app funcionando offline. Troque VERSION ao publicar mudanças.
-const VERSION = 'cp-v2';
+const VERSION = 'cp-v3';
 const SHELL = [
   './',
   './index.html',
