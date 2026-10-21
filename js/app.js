@@ -1,4 +1,4 @@
-import { commit, dadosLocaisAntigos, load, state, subscribe } from './store.js';
+import { commit, dadosLocaisAntigos, flushNow, load, state, subscribe } from './store.js';
 import { aguardarSessao, boasVindas, sair, telaLogin, usuarioAtual } from './auth.js';
 import { icon } from './icons.js';
 import { textMorph } from './textmorph.js';
@@ -269,24 +269,21 @@ document.addEventListener('visibilitychange', () => {
   else if (state.settings.pinHash && hiddenAt && Date.now() - hiddenAt > 60000) lock();
 });
 
-// ---------- Service worker (offline + atualização) ----------
+// ---------- Service worker (offline + atualização automática) ----------
 function registerSW() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  const tinhaControle = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('./sw.js').then((reg) => {
-    const avisar = (w) =>
-      toast('Nova versão disponível', { icon: '✨', timeout: 15000, action: { label: 'Atualizar', onClick: () => w.postMessage('skipWaiting') } });
-    if (reg.waiting && navigator.serviceWorker.controller) avisar(reg.waiting);
-    reg.addEventListener('updatefound', () => {
-      const w = reg.installing;
-      w?.addEventListener('statechange', () => {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) avisar(w);
-      });
+    if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) reg.update().catch(() => {});
     });
   });
   let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
+  navigator.serviceWorker.addEventListener('controllerchange', async () => {
+    if (reloaded || !tinhaControle) return;
     reloaded = true;
+    await flushNow();
     location.reload();
   });
 }

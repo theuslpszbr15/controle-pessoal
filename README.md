@@ -53,7 +53,7 @@ O app já vem compilado (`css/app.css` e `vendor/`). Para mexer no visual, edite
 3. Em *Build and deployment*, escolha **Deploy from a branch**, depois a branch `main` e a pasta `/ (root)`, e clique em **Save**.
 4. Em cerca de 1 minuto o app fica disponível em `https://SEU-USUARIO.github.io/NOME-DO-REPO/`.
 
-Ao publicar mudanças, altere `VERSION` em `sw.js` (ex.: `cp-v2`). Assim o app instalado mostra o aviso **“Nova versão disponível”**.
+Ao publicar mudanças, altere `VERSION` em `sw.js` (ex.: `cp-v6`). O app instalado se atualiza sozinho na próxima vez que for aberto.
 
 ## Instalar no celular
 

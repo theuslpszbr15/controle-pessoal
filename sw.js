@@ -1,5 +1,5 @@
 // Service worker: deixa o app funcionando offline. Troque VERSION ao publicar mudanças.
-const VERSION = 'cp-v4';
+const VERSION = 'cp-v5';
 const SHELL = [
   './',
   './index.html',
@@ -44,7 +44,7 @@ const SHELL = [
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
