@@ -16,7 +16,7 @@ export class Jar {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
     this.camera.position.set(0, 2.3, 7.4);
-    this.camera.lookAt(0, 1.3, 0);
+    this.camera.lookAt(0, 1.6, 0);
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 1.6));
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
