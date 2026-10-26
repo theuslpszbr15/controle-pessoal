@@ -368,6 +368,13 @@
     text-decoration: line-through;
     color: var(--muted);
   }
+
+  &--plan {
+    background: transparent;
+    border: 1.5px dashed color-mix(in srgb, var(--success) 55%, transparent);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
 }
 
 .day-label {

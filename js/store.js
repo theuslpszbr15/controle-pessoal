@@ -38,6 +38,7 @@ const defaults = () => ({
     pinSalt: null,
     foco: { foco: 25, pausa: 5, longa: 15, som: 'nenhum' },
     listaAtiva: null,
+    rotinaTreino: { ativa: false, hora: '07:30', duracao: 60, dias: {} },
   },
   transacoes: [],
   categorias: CATEGORIAS_PADRAO,

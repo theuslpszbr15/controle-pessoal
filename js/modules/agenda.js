@@ -5,7 +5,7 @@ import { confirmSheet, emptyState, fields, invalid, openSheet, toast } from '../
 import { monthNav } from './financas.js';
 import { contasDoMes, estaPaga, vencimento } from './contas.js';
 import { bindTaskList, taskItem } from './tarefas.js';
-import { bindTreinoList, openTreino, treinoItem, treinosDoDia } from './treinos.js';
+import { bindTreinoList, openTreino, pendenteDoDia, planoItem, treinoItem, treinosDoDia } from './treinos.js';
 
 let mes = monthKey();
 let dia = todayISO();
@@ -68,6 +68,9 @@ function marcadores(key) {
   state.eventos.forEach((e) => add(e.data, 'evento'));
   contasDoMes(key).forEach((c) => add(vencimento(c, key), 'conta'));
   (state.treinos || []).forEach((t) => add(t.data, 'treino'));
+  for (let d = parseISO(`${key}-01`); toISO(d).startsWith(key); d = addDays(d, 1)) {
+    if (pendenteDoDia(toISO(d))) add(toISO(d), 'treino-plan');
+  }
   return m;
 }
 
@@ -95,7 +98,8 @@ export default {
     const key = dia.slice(0, 7);
     const contas = contasDoMes(key).filter((c) => vencimento(c, key) === dia);
     const treinos = treinosDoDia(dia);
-    const vazio = !evs.length && !tarefas.length && !contas.length && !treinos.length;
+    const plano = planoItem(dia);
+    const vazio = !evs.length && !tarefas.length && !contas.length && !treinos.length && !plano;
 
     view.innerHTML = `
       ${monthNav(monthLabel(mes))}
@@ -108,7 +112,7 @@ export default {
         <div class="section__head"><h2 style="font-size:1.1rem">${esc(longDate(parseISO(dia)))}</h2>
           <div class="row"><button class="btn btn--soft btn--sm" data-treino-new>${icon('dumbbell')} Treino</button><button class="btn btn--soft btn--sm" data-new>${icon('plus')} Compromisso</button></div></div>
         ${vazio ? `<div class="card">${emptyState('🌤️', 'Nada neste dia')}</div>` : ''}
-        ${treinos.length ? `<div class="day-label">Academia</div><ul class="list" data-treinos>${treinos.map(treinoItem).join('')}</ul>` : ''}
+        ${treinos.length || plano ? `<div class="day-label">Academia</div><ul class="list" data-treinos>${plano}${treinos.map(treinoItem).join('')}</ul>` : ''}
         ${evs.length ? `<ul class="list" data-evs>${evs.map(eventItem).join('')}</ul>` : ''}
         ${tarefas.length ? `<div class="day-label">Tarefas</div><ul class="list" data-tasks>${tarefas.map(taskItem).join('')}</ul>` : ''}
         ${contas.length ? `<div class="day-label">Contas</div><ul class="list">${contas

@@ -426,6 +426,11 @@
     .d-treino {
       background: var(--success);
     }
+
+    .d-treino-plan {
+      background: transparent;
+      box-shadow: inset 0 0 0 1.5px var(--success);
+    }
   }
 
   &__day.is-selected &__dots i {

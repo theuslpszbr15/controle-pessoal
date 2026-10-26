@@ -10,7 +10,7 @@ import { toggleHabit } from './habitos.js';
 import { proximasContas, togglePaga } from './contas.js';
 import { bindEventList, eventItem, eventosDoDia, openEvent } from './agenda.js';
 import { focoHoje } from './foco.js';
-import { duracaoTexto, openTreino, resumoSemana, treinosDoDia } from './treinos.js';
+import { duracaoTexto, pendenteDoDia, registrarPlanejado, resumoSemana, treinosDoDia } from './treinos.js';
 import { openNote } from './notas.js';
 
 const verTodos = (href) => `<a href="#/${href}" class="btn btn--ghost btn--sm" style="margin:-6px -8px 0 0">Ver ${icon('right')}</a>`;
@@ -32,6 +32,7 @@ export default {
     const tema = temaAtual();
     const treinoSemana = resumoSemana();
     const treinosHoje = treinosDoDia(hoje);
+    const planoHoje = pendenteDoDia(hoje);
 
     view.innerHTML = `
       <section class="card card--accent hero beam">
@@ -73,8 +74,8 @@ export default {
 
         <section class="card">
           <div class="row row--between"><div class="card__title">${icon('dumbbell')} Academia</div>${verTodos('treinos')}</div>
-          <div class="row row--between"><div class="stat"><div class="stat__value">${treinoSemana.qtd}x · ${duracaoTexto(treinoSemana.minutos)}</div><div class="stat__label">${treinosHoje.length ? `hoje: ${esc(treinosHoje.map((t) => t.tipo).join(', '))}` : 'esta semana'}</div></div>
-          <button class="btn btn--soft" data-q="treino">${icon('plus')} Fui hoje</button></div>
+          <div class="row row--between"><div class="stat"><div class="stat__value">${treinoSemana.qtd}x · ${duracaoTexto(treinoSemana.minutos)}</div><div class="stat__label">${treinosHoje.length ? `hoje: ${esc(treinosHoje.map((t) => t.tipo).join(', '))} ✅` : planoHoje ? `hoje às ${esc(planoHoje.hora)}: ${esc(planoHoje.tipo)}` : 'esta semana'}</div></div>
+          ${treinosHoje.length ? '' : `<button class="btn ${planoHoje ? 'btn--primary' : 'btn--soft'}" data-q="treino">${icon(planoHoje ? 'check' : 'plus')} ${planoHoje ? 'Fui' : 'Fui hoje'}</button>`}</div>
         </section>
 
         <section class="card">
@@ -109,7 +110,7 @@ export default {
         else if (q === 'receita') openTransaction({ tipo: 'receita' });
         else if (q === 'tarefa') openTask();
         else if (q === 'evento') openEvent(null, { data: hoje });
-        else if (q === 'treino') openTreino();
+        else if (q === 'treino') registrarPlanejado();
         else openNote();
       }),
     );

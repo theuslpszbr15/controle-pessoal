@@ -159,9 +159,38 @@ await wait(800);
 const saved = await page.evaluate(async () => (await import('/js/store.js')).state.transacoes.some((t) => t.descricao === 'Padaria' && t.valor === 37.5));
 if (!saved) errors.push('Gasto não foi salvo');
 
-// Registrar um treino e conferir na agenda e no hábito "Academia"
+// Rotina padrão: todo dia às 07:30, "Full body"; aparece planejada e registra com "Fui"
 await page.evaluate(() => (location.hash = '#/treinos'));
 await wait(900);
+await page.click('[data-rotina]');
+await wait(600);
+await page.$eval('#sheet input[name=ativa]', (el) => (el.checked = true));
+await page.$eval('#sheet input[name=hora]', (el) => (el.value = '07:30'));
+await page.select('#sheet select[name=todos]', 'Full body');
+await page.screenshot({ path: `screens/form-rotina${suffix}.png` });
+await page.click('#sheet button[type=submit]');
+await wait(1200);
+await page.evaluate(() => (location.hash = '#/agenda'));
+await wait(1500);
+const plano = await page.evaluate(() => ({
+  futuro: document.querySelectorAll('.d-treino-plan').length,
+  hoje: document.querySelector('[data-treinos] .item--plan')?.textContent.includes('07:30'),
+}));
+if (!plano.futuro || !plano.hoje) errors.push(`Rotina não apareceu na agenda: ${JSON.stringify(plano)}`);
+await page.screenshot({ path: `screens/agenda-rotina${suffix}.png`, fullPage: !desktop });
+await page.click('[data-treinos] [data-fui]');
+await wait(900);
+const fui = await page.evaluate(async () => {
+  const { state } = await import('/js/store.js');
+  const { todayISO } = await import('/js/utils.js');
+  return state.treinos.some((t) => t.data === todayISO() && t.hora === '07:30' && t.tipo === 'Full body' && t.duracao === 60);
+});
+if (!fui) errors.push('Botão "Fui" não registrou o treino da rotina');
+
+// Registrar um treino manual e conferir na agenda e no hábito "Academia"
+await page.evaluate(() => (location.hash = '#/treinos'));
+await wait(900);
+await page.screenshot({ path: `screens/treinos-rotina${suffix}.png`, fullPage: !desktop });
 await page.click('[data-new]');
 await wait(600);
 await page.evaluate(() => [...document.querySelectorAll('#sheet .radio-chips label')].find((l) => l.textContent.includes('Pernas')).click());
