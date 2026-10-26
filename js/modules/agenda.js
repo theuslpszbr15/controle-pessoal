@@ -5,6 +5,7 @@ import { confirmSheet, emptyState, fields, invalid, openSheet, toast } from '../
 import { monthNav } from './financas.js';
 import { contasDoMes, estaPaga, vencimento } from './contas.js';
 import { bindTaskList, taskItem } from './tarefas.js';
+import { bindTreinoList, openTreino, treinoItem, treinosDoDia } from './treinos.js';
 
 let mes = monthKey();
 let dia = todayISO();
@@ -66,6 +67,7 @@ function marcadores(key) {
   state.tarefas.filter((t) => !t.feito).forEach((t) => add(t.prazo, 'tarefa'));
   state.eventos.forEach((e) => add(e.data, 'evento'));
   contasDoMes(key).forEach((c) => add(vencimento(c, key), 'conta'));
+  (state.treinos || []).forEach((t) => add(t.data, 'treino'));
   return m;
 }
 
@@ -92,18 +94,21 @@ export default {
     const tarefas = state.tarefas.filter((t) => !t.feito && t.prazo === dia);
     const key = dia.slice(0, 7);
     const contas = contasDoMes(key).filter((c) => vencimento(c, key) === dia);
-    const vazio = !evs.length && !tarefas.length && !contas.length;
+    const treinos = treinosDoDia(dia);
+    const vazio = !evs.length && !tarefas.length && !contas.length && !treinos.length;
 
     view.innerHTML = `
       ${monthNav(monthLabel(mes))}
       <section class="card cal">
         <div class="cal__head">${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'].map((d) => `<span>${d}</span>`).join('')}</div>
         <div class="cal__grid">${celulas}</div>
-        <div class="legend-inline"><span><i class="dot"></i>Tarefas</span><span><i class="dot" style="background:var(--accent-2)"></i>Compromissos</span><span><i class="dot" style="background:var(--warning)"></i>Contas</span></div>
+        <div class="legend-inline"><span><i class="dot"></i>Tarefas</span><span><i class="dot" style="background:var(--accent-2)"></i>Compromissos</span><span><i class="dot" style="background:var(--warning)"></i>Contas</span><span><i class="dot" style="background:var(--success)"></i>Treinos</span></div>
       </section>
       <section class="section">
-        <div class="section__head"><h2 style="font-size:1.1rem">${esc(longDate(parseISO(dia)))}</h2><button class="btn btn--soft btn--sm" data-new>${icon('plus')} Compromisso</button></div>
+        <div class="section__head"><h2 style="font-size:1.1rem">${esc(longDate(parseISO(dia)))}</h2>
+          <div class="row"><button class="btn btn--soft btn--sm" data-treino-new>${icon('dumbbell')} Treino</button><button class="btn btn--soft btn--sm" data-new>${icon('plus')} Compromisso</button></div></div>
         ${vazio ? `<div class="card">${emptyState('🌤️', 'Nada neste dia')}</div>` : ''}
+        ${treinos.length ? `<div class="day-label">Academia</div><ul class="list" data-treinos>${treinos.map(treinoItem).join('')}</ul>` : ''}
         ${evs.length ? `<ul class="list" data-evs>${evs.map(eventItem).join('')}</ul>` : ''}
         ${tarefas.length ? `<div class="day-label">Tarefas</div><ul class="list" data-tasks>${tarefas.map(taskItem).join('')}</ul>` : ''}
         ${contas.length ? `<div class="day-label">Contas</div><ul class="list">${contas
@@ -125,6 +130,9 @@ export default {
       ctx.refresh();
     });
     view.querySelector('[data-new]').addEventListener('click', () => openEvent(null, { data: dia }));
+    view.querySelector('[data-treino-new]').addEventListener('click', () => openTreino(null, { data: dia }));
+    const trList = view.querySelector('[data-treinos]');
+    if (trList) bindTreinoList(trList);
     const evList = view.querySelector('[data-evs]');
     if (evList) bindEventList(evList);
     const tList = view.querySelector('[data-tasks]');

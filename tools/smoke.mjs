@@ -14,6 +14,7 @@ const BASE = `http://localhost:${PORT}/`;
 mkdirSync('screens', { recursive: true });
 
 const server = spawn(process.execPath, ['tools/serve.mjs', String(PORT)], { stdio: 'ignore' });
+process.on('exit', () => server.kill());
 await new Promise((r) => setTimeout(r, 600));
 
 const browser = await puppeteer.launch({
@@ -24,6 +25,7 @@ const browser = await puppeteer.launch({
 const errors = [];
 const page = await browser.newPage();
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+page.on('error', (e) => console.error('CRASH:', e.message));
 page.on('console', (m) => {
   // 400 esperado no teste de senha errada
   if (m.type() === 'error' && !m.text().includes('status of 400')) errors.push(`console: ${m.text()}`);
@@ -112,13 +114,20 @@ await page.evaluate(async () => {
   ];
   state.diario = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [d(-i), { humor: (i % 5) + 1, texto: 'Dia normal' }]));
   state.focoSessoes = [{ data: d(0), minutos: 25 }, { data: d(0), minutos: 25 }, { data: d(-1), minutos: 50 }, { data: d(-3), minutos: 75 }];
+  state.treinos = [
+    { id: id(), tipo: 'Costas e bíceps', data: d(-1), hora: '18:40', duracao: 75, notas: 'Puxada 4x12' },
+    { id: id(), tipo: 'Peito e tríceps', data: d(-3), hora: '07:10', duracao: 60, notas: '' },
+    { id: id(), tipo: 'Cardio', data: d(-4), hora: '19:00', duracao: 40, notas: 'Esteira' },
+    { id: id(), tipo: 'Pernas', data: d(-8), hora: '18:30', duracao: 90, notas: '' },
+  ];
   commit(...Object.keys(state));
 });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const routes = ['inicio', 'financas', 'metas', 'contas', 'tarefas', 'habitos', 'agenda', 'compras', 'notas', 'foco', 'ajustes'];
+const routes = ['inicio', 'financas', 'metas', 'contas', 'tarefas', 'habitos', 'treinos', 'agenda', 'compras', 'notas', 'foco', 'ajustes'];
 const suffix = desktop ? '-desktop' : '';
 for (const r of routes) {
+  console.log('rota:', r);
   await page.evaluate((r) => (location.hash = `#/${r}`), r);
   await wait(1700);
   await page.screenshot({ path: `screens/${r}${suffix}.png`, fullPage: !desktop });
@@ -150,6 +159,33 @@ await wait(800);
 const saved = await page.evaluate(async () => (await import('/js/store.js')).state.transacoes.some((t) => t.descricao === 'Padaria' && t.valor === 37.5));
 if (!saved) errors.push('Gasto não foi salvo');
 
+// Registrar um treino e conferir na agenda e no hábito "Academia"
+await page.evaluate(() => (location.hash = '#/treinos'));
+await wait(900);
+await page.click('[data-new]');
+await wait(600);
+await page.evaluate(() => [...document.querySelectorAll('#sheet .radio-chips label')].find((l) => l.textContent.includes('Pernas')).click());
+await page.$eval('#sheet input[name=horas]', (el) => (el.value = '1'));
+await page.$eval('#sheet input[name=minutos]', (el) => (el.value = '30'));
+await page.type('#sheet textarea[name=notas]', 'Agachamento 4x10');
+await page.screenshot({ path: `screens/form-treino${suffix}.png` });
+await page.click('#sheet button[type=submit]');
+await wait(900);
+await page.evaluate(() => (location.hash = '#/agenda'));
+await wait(1500);
+const agendaTreino = await page.evaluate(() => ({
+  dot: !!document.querySelector('.cal__day.is-today .d-treino'),
+  item: document.querySelector('[data-treinos]')?.textContent.includes('Pernas') && document.querySelector('[data-treinos]')?.textContent.includes('1h30'),
+}));
+if (!agendaTreino.dot || !agendaTreino.item) errors.push(`Treino não apareceu na agenda: ${JSON.stringify(agendaTreino)}`);
+await page.screenshot({ path: `screens/agenda-treino${suffix}.png`, fullPage: !desktop });
+const habitoMarcado = await page.evaluate(async () => {
+  const { state } = await import('/js/store.js');
+  const { todayISO } = await import('/js/utils.js');
+  return !!state.habitos.find((h) => h.nome === 'Academia')?.dias?.[todayISO()];
+});
+if (!habitoMarcado) errors.push('Hábito Academia não foi marcado pelo treino');
+
 for (const tema of ['lavanda', 'oceano', 'floresta', 'terracota', 'papel', 'grafite', 'sakura', 'meia-noite', 'cafe']) {
   await page.evaluate(async (t) => {
     const { state, commit } = await import('/js/store.js');
@@ -175,7 +211,7 @@ const sincronizar = (p) =>
   });
 await sincronizar(page);
 await page.evaluate(async () => (await import('/js/auth.js')).sair());
-await page.goto(BASE, { waitUntil: 'networkidle0' });
+await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#auth form');
 await page.type('#auth [name=usuario]', USER);
 await page.type('#auth [name=senha]', 'errada');
@@ -199,7 +235,7 @@ const ctx2 = await browser.createBrowserContext();
 const p2 = await ctx2.newPage();
 p2.on('pageerror', (e) => errors.push(`pageerror(2): ${e.message}`));
 await p2.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-await p2.goto(BASE, { waitUntil: 'networkidle0' });
+await p2.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 90000 });
 await p2.waitForSelector('#auth form');
 await p2.click('#auth [data-toggle]');
 await wait(500);

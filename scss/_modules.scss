@@ -422,6 +422,10 @@
     .d-evento {
       background: var(--accent-2);
     }
+
+    .d-treino {
+      background: var(--success);
+    }
   }
 
   &__day.is-selected &__dots i {

@@ -51,6 +51,7 @@ const defaults = () => ({
   notas: [],
   diario: {},
   focoSessoes: [],
+  treinos: [],
 });
 
 export const KEYS = Object.keys(defaults());

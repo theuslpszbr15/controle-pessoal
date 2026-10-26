@@ -14,13 +14,14 @@ import metas, { openGoal } from './modules/metas.js';
 import contas, { openBill } from './modules/contas.js';
 import tarefas, { openTask } from './modules/tarefas.js';
 import habitos, { openHabit } from './modules/habitos.js';
+import treinos, { openTreino } from './modules/treinos.js';
 import agenda, { openEvent } from './modules/agenda.js';
 import compras, { openItem } from './modules/compras.js';
 import notas, { openNote } from './modules/notas.js';
 import foco from './modules/foco.js';
 import ajustes, { verifyPin } from './modules/ajustes.js';
 
-const MODULES = [inicio, financas, metas, contas, tarefas, habitos, agenda, compras, notas, foco, ajustes];
+const MODULES = [inicio, financas, metas, contas, tarefas, habitos, treinos, agenda, compras, notas, foco, ajustes];
 const byId = Object.fromEntries(MODULES.map((m) => [m.id, m]));
 const TABS = ['inicio', 'financas', 'tarefas'];
 
@@ -151,6 +152,7 @@ function openQuickAdd() {
     ['nota', '🗒️', 'Nota', () => openNote()],
     ['item', '🛒', 'Item de compra', () => openItem()],
     ['conta', '💡', 'Conta fixa', () => openBill()],
+    ['treino', '🏋️', 'Treino', () => openTreino()],
     ['habito', '🌱', 'Hábito', () => openHabit()],
     ['meta', '🫙', 'Meta', () => openGoal()],
   ];

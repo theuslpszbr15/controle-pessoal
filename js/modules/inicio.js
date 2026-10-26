@@ -10,6 +10,7 @@ import { toggleHabit } from './habitos.js';
 import { proximasContas, togglePaga } from './contas.js';
 import { bindEventList, eventItem, eventosDoDia, openEvent } from './agenda.js';
 import { focoHoje } from './foco.js';
+import { duracaoTexto, openTreino, resumoSemana, treinosDoDia } from './treinos.js';
 import { openNote } from './notas.js';
 
 const verTodos = (href) => `<a href="#/${href}" class="btn btn--ghost btn--sm" style="margin:-6px -8px 0 0">Ver ${icon('right')}</a>`;
@@ -29,6 +30,8 @@ export default {
     const metas = state.metas.filter((m) => m.atual < m.alvo).slice(0, 2);
     const habitosFeitos = state.habitos.filter((h) => h.dias?.[hoje]).length;
     const tema = temaAtual();
+    const treinoSemana = resumoSemana();
+    const treinosHoje = treinosDoDia(hoje);
 
     view.innerHTML = `
       <section class="card card--accent hero beam">
@@ -69,6 +72,12 @@ export default {
         </section>
 
         <section class="card">
+          <div class="row row--between"><div class="card__title">${icon('dumbbell')} Academia</div>${verTodos('treinos')}</div>
+          <div class="row row--between"><div class="stat"><div class="stat__value">${treinoSemana.qtd}x · ${duracaoTexto(treinoSemana.minutos)}</div><div class="stat__label">${treinosHoje.length ? `hoje: ${esc(treinosHoje.map((t) => t.tipo).join(', '))}` : 'esta semana'}</div></div>
+          <button class="btn btn--soft" data-q="treino">${icon('plus')} Fui hoje</button></div>
+        </section>
+
+        <section class="card">
           <div class="card__title">${icon('clock')} Foco</div>
           <div class="row row--between"><div class="stat"><div class="stat__value">${focoHoje()} min</div><div class="stat__label">focado hoje</div></div>
           <a class="btn btn--soft" href="#/foco">${icon('play')} Focar</a></div>
@@ -100,6 +109,7 @@ export default {
         else if (q === 'receita') openTransaction({ tipo: 'receita' });
         else if (q === 'tarefa') openTask();
         else if (q === 'evento') openEvent(null, { data: hoje });
+        else if (q === 'treino') openTreino();
         else openNote();
       }),
     );
